@@ -166,7 +166,7 @@ Useful contributions:
 
 Made with ❤️ in Norway/Europe by [@Cyb5r3Gene](https://x.com/Cyb5r3Gene)
 
-> Built during real-world AVD migration work at a Norwegian financial institution, where Bloomberg Terminal users on Azure Virtual Desktop were experiencing MDE-related performance issues.
+> Built during real-world Azure Virtual Desktop (AVD) migration project in Norwegian, where Bloomberg Terminal users on AVD were experiencing MDE-related performance issues.
 
 ---
 
