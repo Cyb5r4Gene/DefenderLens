@@ -53,6 +53,9 @@ The script will ask you:
 
 Use the application normally during the recording, then stop. The script exports a JSON file to `C:\Temp\DefenderLens\`.
 
+Example of Microsoft Outlook I collected on my PC.
+![DefenderLens Dashboard](assets/1.png)
+
 ### Step 2 — Open the dashboard
 
 Open `DefenderLens.html` in any modern browser (Edge, Chrome, Firefox). Drag and drop the JSON file onto the landing page — or click **Browse File**.
