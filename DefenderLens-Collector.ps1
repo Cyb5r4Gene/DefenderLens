@@ -244,7 +244,10 @@ $JSONPayload = [ordered]@{
 }
 
 try {
-    $JSONPayload | ConvertTo-Json -Depth 6 | Out-File -FilePath $JSONFile -Encoding UTF8
+    $JSONString = $JSONPayload | ConvertTo-Json -Depth 6
+    # Use UTF8 without BOM — plain Out-File -Encoding UTF8 adds a BOM on PS 5.1
+    # which breaks JSON.parse() in browsers
+    [System.IO.File]::WriteAllText($JSONFile, $JSONString, [System.Text.Encoding]::UTF8)
     Write-OK "JSON exported: $JSONFile"
 } catch {
     Write-Fail "JSON export failed: $_"
