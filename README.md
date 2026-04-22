@@ -6,6 +6,28 @@
 ![DefenderLens Dashboard](assets/screenshot.png)
 
 ---
+## ⚠️ Before You Run the Collector Script
+
+To run the PowerShell collector script on your machine, you may need to adjust your execution policy first. By default, Windows blocks unsigned scripts as a security measure.
+
+Open PowerShell as **Administrator** and run one of the following:
+
+**Option 1 — Bypass for a single run only (safest, recommended for testing):**
+```powershell
+PowerShell -ExecutionPolicy Bypass -File .\DefenderLens-Collector.ps1
+```
+
+**Option 2 — Allow unsigned local scripts permanently for your user:**
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope CurrentUser
+```
+
+If you downloaded the script from the internet, Windows may also block it with a Zone identifier. Run this to unblock it:
+```powershell
+Unblock-File -Path .\DefenderLens-Collector.ps1
+```
+
+> **Note:** These steps are only needed on personal or unmanaged machines. On corporate endpoints managed via Intune or Group Policy, execution policy is typically controlled by your IT department and Option 1 is the safest approach.
 
 ## What is DefenderLens?
 
