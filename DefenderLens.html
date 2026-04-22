@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DefenderLens — MDE Performance Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #080B10;
+  --bg2:      #0D1117;
+  --bg3:      #141B24;
+  --bg4:      #1A2332;
+  --border:   rgba(0,200,255,0.08);
+  --border2:  rgba(0,200,255,0.18);
+  --cyan:     #00C8FF;
+  --cyan-dim: rgba(0,200,255,0.10);
+  --cyan-glow:rgba(0,200,255,0.25);
+  --red:      #FF4060;
+  --red-dim:  rgba(255,64,96,0.12);
+  --amber:    #FFB020;
+  --amber-dim:rgba(255,176,32,0.10);
+  --green:    #00E5A0;
+  --green-dim:rgba(0,229,160,0.10);
+  --text:     #C8D8E8;
+  --muted:    #4A6070;
+  --mono:     'JetBrains Mono', monospace;
+  --display:  'Barlow Condensed', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,200,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,200,255,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* TOPBAR */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,11,16,0.94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border2);
+  padding: 12px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+.logo span { color: var(--cyan); }
+
+.version-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  border: 1px solid var(--border2);
+  padding: 2px 8px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.topbar-meta {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+/* MAIN */
+main {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+
+/* DROP ZONE */
+#dropzone {
+  border: 2px dashed var(--border2);
+  padding: 72px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s;
+  background: var(--bg2);
+  position: relative;
+  overflow: hidden;
+}
+
+#dropzone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, var(--cyan-dim) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+#dropzone:hover::before,
+#dropzone.drag-over::before { opacity: 1; }
+
+#dropzone:hover,
+#dropzone.drag-over {
+  border-color: var(--cyan);
+  box-shadow: 0 0 40px var(--cyan-glow);
+}
+
+.drop-icon { font-size: 52px; margin-bottom: 16px; display: block; filter: drop-shadow(0 0 12px var(--cyan)); }
+
+.drop-title {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+}
+
+.drop-sub { font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+
+/* FIX: Browse button uses onclick to trigger hidden input */
+.drop-btn {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  border: 1px solid var(--cyan);
+  padding: 10px 28px;
+  cursor: pointer;
+  background: var(--cyan-dim);
+  transition: all 0.2s;
+  text-transform: uppercase;
+  user-select: none;
+}
+.drop-btn:hover { background: var(--cyan); color: var(--bg); }
+
+#fileInput { display: none; }
+.drop-note { margin-top: 16px; font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
+
+/* DASHBOARD */
+#dashboard { display: none; }
+
+/* SESSION HEADER */
+.session-header {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cyan);
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
+  align-items: center;
+}
+
+.session-app {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+.session-app span { color: var(--cyan); }
+
+.session-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.meta-pill {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--muted);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+}
+.meta-pill strong { color: var(--text); }
+
+.reset-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--red);
+  border: 1px solid var(--red);
+  background: var(--red-dim);
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.reset-btn:hover { background: var(--red); color: #fff; }
+
+/* INSIGHT PANEL */
+.insight-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-left: 3px solid var(--amber);
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.insight-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.insight-icon { font-size: 16px; }
+
+.insight-title {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--amber);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.insight-badge {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--amber);
+  background: var(--amber-dim);
+  border: 1px solid rgba(255,176,32,0.3);
+  padding: 2px 8px;
+  text-transform: uppercase;
+}
+
+.insight-body { display: flex; flex-direction: column; gap: 8px; }
+
+.insight-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.insight-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.insight-dot.red   { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.insight-dot.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+.insight-dot.cyan  { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.insight-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+/* STAT CARDS */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+}
+.stat-card.cyan::after  { background: var(--cyan); }
+.stat-card.red::after   { background: var(--red); }
+.stat-card.amber::after { background: var(--amber); }
+.stat-card.green::after { background: var(--green); }
+
+.stat-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.stat-sub { font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+/* FILTER */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.filter-input {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 9px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.filter-input:focus { border-color: var(--cyan); }
+.filter-input::placeholder { color: var(--muted); }
+.filter-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; white-space: nowrap; }
+
+/* PANELS */
+.panel-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel-full { margin-bottom: 16px; }
+
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+}
+
+.panel-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-title {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.03em;
+}
+
+.panel-badge {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  background: var(--cyan-dim);
+  border: 1px solid var(--border2);
+  padding: 2px 8px;
+  text-transform: uppercase;
+}
+
+.panel-body { padding: 16px 18px; }
+
+/* CHART */
+.chart-wrap { position: relative; height: 240px; }
+
+/* TABLES */
+.data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+
+.data-table th {
+  text-align: left;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border2);
+  font-weight: 600;
+}
+
+.data-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--bg3); }
+.data-table td.mono { font-family: var(--mono); }
+.data-table td.path { color: var(--muted); font-size: 10px; word-break: break-all; max-width: 320px; }
+
+/* DURATION BAR */
+.dur-wrap { display: flex; align-items: center; gap: 8px; }
+.dur-bar-bg { flex: 1; height: 5px; background: var(--bg4); border-radius: 2px; overflow: hidden; min-width: 60px; }
+.dur-bar { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+.dur-val { font-family: var(--mono); font-size: 10px; white-space: nowrap; min-width: 72px; text-align: right; }
+
+/* SEVERITY */
+.sev {
+  display: inline-block;
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.sev-high { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(255,64,96,0.3); }
+.sev-med  { background: var(--amber-dim);  color: var(--amber); border: 1px solid rgba(255,176,32,0.3); }
+.sev-low  { background: var(--green-dim);  color: var(--green); border: 1px solid rgba(0,229,160,0.3); }
+
+/* FOOTER */
+footer {
+  position: relative; z-index: 1;
+  text-align: center;
+  padding: 22px 20px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  letter-spacing: 0.05em;
+}
+footer a { color: var(--cyan); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+.footer-heart { color: var(--red); }
+
+/* ANIMATIONS */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.4s ease forwards; }
+.fu1 { animation-delay: 0.04s; opacity: 0; }
+.fu2 { animation-delay: 0.09s; opacity: 0; }
+.fu3 { animation-delay: 0.14s; opacity: 0; }
+.fu4 { animation-delay: 0.19s; opacity: 0; }
+.fu5 { animation-delay: 0.24s; opacity: 0; }
+.fu6 { animation-delay: 0.29s; opacity: 0; }
+.fu7 { animation-delay: 0.34s; opacity: 0; }
+
+@media (max-width: 860px) {
+  .stat-row { grid-template-columns: 1fr 1fr; }
+  .panel-grid-2 { grid-template-columns: 1fr; }
+  .session-header { grid-template-columns: 1fr; }
+}
+@media (max-width: 540px) {
+  .stat-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <span class="logo">Defender<span>Lens</span></span>
+    <span class="version-badge">v1.1</span>
+  </div>
+  <div class="topbar-meta">
+    MDE Performance Dashboard<br>
+    Browser-only &middot; No data leaves your machine
+  </div>
+</div>
+
+<main>
+
+  <!-- DROP ZONE -->
+  <div id="dropzone">
+    <span class="drop-icon">&#128269;</span>
+    <div class="drop-title">Drop your DefenderLens JSON file here</div>
+    <div class="drop-sub">Generated by DefenderLens-Collector.ps1 on the endpoint</div>
+    <!-- FIX: use onclick instead of label/for to reliably open file picker -->
+    <div class="drop-btn" onclick="document.getElementById('fileInput').click()">Browse File</div>
+    <input type="file" id="fileInput" accept=".json">
+    <div class="drop-note">All analysis happens locally in your browser. No data is uploaded anywhere.</div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard">
+
+    <!-- SESSION HEADER -->
+    <div class="session-header fade-up fu1">
+      <div>
+        <div class="session-app">Analyzing: <span id="metaApp">—</span></div>
+        <div class="session-grid" id="metaPills"></div>
+      </div>
+      <button class="reset-btn" onclick="resetDashboard()">&#8617; Load New File</button>
+    </div>
+
+    <!-- INSIGHT PANEL -->
+    <div class="insight-panel fade-up fu2" id="insightPanel">
+      <div class="insight-header">
+        <span class="insight-icon">&#9888;</span>
+        <span class="insight-title">Analysis Summary</span>
+        <span class="insight-badge">Auto-generated</span>
+      </div>
+      <div class="insight-body" id="insightBody"></div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="stat-row">
+      <div class="stat-card cyan fade-up fu3">
+        <div class="stat-label">Total Scans Captured</div>
+        <div class="stat-value" id="statScans">—</div>
+        <div class="stat-sub">from recording session</div>
+      </div>
+      <div class="stat-card red fade-up fu3">
+        <div class="stat-label">Top Process Overhead</div>
+        <div class="stat-value" id="statTopProc" style="font-size:22px;padding-top:4px">—</div>
+        <div class="stat-sub" id="statTopProcName">highest scan duration</div>
+      </div>
+      <div class="stat-card amber fade-up fu3">
+        <div class="stat-label">Unique Extensions</div>
+        <div class="stat-value" id="statExt">—</div>
+        <div class="stat-sub">file types scanned</div>
+      </div>
+      <div class="stat-card green fade-up fu3">
+        <div class="stat-label">MDE Version</div>
+        <div class="stat-value" id="statMDE" style="font-size:16px;padding-top:8px">—</div>
+        <div class="stat-sub" id="statOS">endpoint OS</div>
+      </div>
+    </div>
+
+    <!-- FILTER -->
+    <div class="filter-bar fade-up fu4">
+      <span class="filter-label">Filter:</span>
+      <input class="filter-input" id="filterInput" type="text" placeholder="Type process name, file path, or extension to filter all tables...">
+    </div>
+
+    <!-- CHARTS -->
+    <div class="panel-grid-2 fade-up fu4">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Top Processes by Scan Duration</span>
+          <span class="panel-badge">CPU Impact</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap"><canvas id="chartProcesses"></canvas></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Top Extensions by Scan Duration</span>
+          <span class="panel-badge">File Types</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap"><canvas id="chartExtensions"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROCESSES TABLE -->
+    <div class="panel panel-full fade-up fu5">
+      <div class="panel-header">
+        <span class="panel-title">Top Processes</span>
+        <span class="panel-badge" id="badgeProcesses">—</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <table class="data-table" id="tableProcesses">
+          <thead><tr>
+            <th>#</th><th>Process</th><th>Total Duration (ms)</th>
+            <th>Avg Duration (ms)</th><th>Scan Count</th><th>Severity</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FILES TABLE -->
+    <div class="panel panel-full fade-up fu5">
+      <div class="panel-header">
+        <span class="panel-title">Top Files</span>
+        <span class="panel-badge" id="badgeFiles">—</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <table class="data-table" id="tableFiles">
+          <thead><tr>
+            <th>#</th><th>File Path</th><th>Total Duration (ms)</th>
+            <th>Scan Count</th><th>Severity</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- EXTENSIONS TABLE -->
+    <div class="panel panel-full fade-up fu6">
+      <div class="panel-header">
+        <span class="panel-title">Top Extensions</span>
+        <span class="panel-badge" id="badgeExtensions">—</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <table class="data-table" id="tableExtensions">
+          <thead><tr>
+            <th>#</th><th>Extension</th><th>Total Duration (ms)</th>
+            <th>Scan Count</th><th>Severity</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RAW SCANS -->
+    <div class="panel panel-full fade-up fu7">
+      <div class="panel-header">
+        <span class="panel-title">Raw Scan Events</span>
+        <span class="panel-badge" id="badgeScans">—</span>
+      </div>
+      <div class="panel-body" style="padding:0; max-height:420px; overflow-y:auto;">
+        <table class="data-table" id="tableScans">
+          <thead><tr>
+            <th>#</th><th>Path</th><th>Process</th><th>Duration (ms)</th><th>Reason</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /dashboard -->
+</main>
+
+<footer>
+  <strong>DefenderLens</strong> &nbsp;&middot;&nbsp; MDE Performance Dashboard &nbsp;&middot;&nbsp;
+  Browser-only, no server required &nbsp;&middot;&nbsp;
+  <a href="https://github.com/YOUR_GITHUB/DefenderLens" target="_blank">github.com/YOUR_GITHUB/DefenderLens</a>
+  <br><br>
+  Made with <span class="footer-heart">&#10084;</span> in Norway/Europe by
+  <a href="https://x.com/cyb5r3Gene" target="_blank">@cyb5r3Gene</a>
+</footer>
+
+<script>
+// STATE
+let DATA = null;
+let charts = {};
+let filterTimer = null;
+
+// DROP ZONE
+const dropzone  = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+});
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try {
+      DATA = JSON.parse(evt.target.result);
+      renderDashboard(DATA);
+    } catch(err) {
+      alert('Could not parse JSON file. Make sure it was generated by DefenderLens-Collector.ps1');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// KEY ACCESS — tries many possible field names MDE uses
+function getVal(obj, keys) {
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+    const found = Object.keys(obj).find(ok => ok.toLowerCase() === k.toLowerCase());
+    if (found && obj[found] !== null && obj[found] !== undefined && obj[found] !== '') return obj[found];
+  }
+  return null;
+}
+
+// MDE PowerShell outputs TimeSpan as milliseconds (already converted in PS script)
+// But also handles string like "00:00:00.123" just in case
+function parseDur(obj) {
+  const raw = getVal(obj, [
+    'TotalDuration','Duration','ScanDuration','TotalScanDuration',
+    'MaxDuration','AverageDuration'
+  ]);
+  if (raw === null || raw === undefined) return 0;
+  // If it's already a number
+  if (typeof raw === 'number') return raw;
+  const str = String(raw).trim();
+  // TimeSpan format: "00:00:00.1234567"
+  const tsMatch = str.match(/^(\d+):(\d+):(\d+)\.(\d+)$/);
+  if (tsMatch) {
+    const h = parseInt(tsMatch[1]), m = parseInt(tsMatch[2]),
+          s = parseInt(tsMatch[3]), frac = parseFloat('0.' + tsMatch[4]);
+    return Math.round((h*3600 + m*60 + s + frac) * 1000);
+  }
+  const n = parseFloat(str);
+  return isNaN(n) ? 0 : n;
+}
+
+// Process name — MDE uses different keys depending on PS version/platform
+function getProcName(obj) {
+  // Try all known variants
+  const name = getVal(obj, [
+    'ProcessName','Process','Name','TopProcess',
+    'InitiatingProcessName','InitiatingProcess'
+  ]);
+  if (name && name !== '' && name !== 'null') return name;
+
+  // Last resort: scan all keys for one that looks like a process name
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === 'string' && v.match(/\.(exe|com|dll|sys)$/i)) return v;
+  }
+  return null;
+}
+
+function getCount(obj) {
+  const raw = getVal(obj, ['Count','ScanCount','TotalCount','TotalScans','NumberOfScans']);
+  if (raw === null || raw === undefined) return '—';
+  return raw;
+}
+
+function severity(dur, max) {
+  const pct = max > 0 ? dur / max : 0;
+  if (pct > 0.5) return ['HIGH', 'sev-high'];
+  if (pct > 0.2) return ['MED',  'sev-med'];
+  return                ['LOW',  'sev-low'];
+}
+
+// RENDER DASHBOARD
+function renderDashboard(d) {
+  const meta = d.meta || {};
+  dropzone.style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  document.getElementById('metaApp').textContent = meta.appName || 'Unknown';
+
+  const pills = [
+    ['Hostname',    meta.hostname],
+    ['User',        meta.username],
+    ['Recorded',    meta.recordedAt],
+    ['ETL Size',    meta.etlSizeMB ? meta.etlSizeMB + ' MB' : null],
+    ['Session ID',  meta.sessionId],
+    ['Description', meta.description],
+  ];
+
+  document.getElementById('metaPills').innerHTML = pills
+    .filter(p => p[1])
+    .map(p => `<span class="meta-pill"><strong>${p[0]}:</strong> ${p[1]}</span>`)
+    .join('');
+
+  // Stat cards
+  document.getElementById('statScans').textContent = (d.topScans || []).length;
+  document.getElementById('statExt').textContent   = (d.topExtensions || []).length;
+  document.getElementById('statMDE').textContent   = meta.mdeVersion || '—';
+  document.getElementById('statOS').textContent    = meta.osVersion  || '—';
+
+  const topProc = (d.topProcesses || [])[0];
+  if (topProc) {
+    const dur  = parseDur(topProc);
+    const name = getProcName(topProc) || 'Unknown process';
+    document.getElementById('statTopProc').textContent    = dur > 0 ? dur.toLocaleString() + ' ms' : '—';
+    document.getElementById('statTopProcName').textContent = name;
+  }
+
+  renderInsights(d, meta);
+  renderCharts(d);
+  renderTable('tableProcesses', 'badgeProcesses', d.topProcesses || [], 'process');
+  renderTable('tableFiles',     'badgeFiles',     d.topFiles     || [], 'file');
+  renderTable('tableExtensions','badgeExtensions', d.topExtensions|| [], 'extension');
+  renderScansTable(d.topScans || []);
+
+  document.getElementById('filterInput').addEventListener('input', () => {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(applyFilter, 200);
+  });
+}
+
+// INSIGHTS — generate human-readable summary from data
+function renderInsights(d, meta) {
+  const insights = [];
+  const appName  = meta.appName || 'the application';
+  const procs    = d.topProcesses || [];
+  const files    = d.topFiles     || [];
+  const exts     = d.topExtensions|| [];
+  const scans    = d.topScans     || [];
+
+  // Top process analysis
+  if (procs.length > 0) {
+    const top = procs[0];
+    const name = getProcName(top);
+    const dur  = parseDur(top);
+    const cnt  = getCount(top);
+
+    if (!name || name === 'Unknown') {
+      insights.push({
+        color: 'amber',
+        text: `<strong>Unknown process names detected.</strong> This is a known limitation of MDE's PowerShell exporter — ` +
+              `the process name field may be empty when the scan was triggered by the kernel or a system service rather than a user-mode process. ` +
+              `It does NOT mean the data is wrong. The scan durations are still accurate and represent real overhead.`
+      });
+    } else {
+      insights.push({
+        color: 'red',
+        text: `<strong>${name}</strong> is the highest-impact process with <strong>${dur.toLocaleString()} ms</strong> total scan duration` +
+              (cnt !== '—' ? ` across <strong>${cnt}</strong> scans` : '') +
+              `. This means MDE's real-time protection spent the most time inspecting files and memory operations triggered by this process.`
+      });
+    }
+  }
+
+  // DLL / EXE extension analysis
+  const dllExt = exts.find(e => {
+    const n = getVal(e, ['Extension','Ext','Name']) || '';
+    return n.toLowerCase().includes('dll');
+  });
+  const exeExt = exts.find(e => {
+    const n = getVal(e, ['Extension','Ext','Name']) || '';
+    return n.toLowerCase().includes('exe');
+  });
+
+  if (dllExt) {
+    const dur = parseDur(dllExt);
+    insights.push({
+      color: 'red',
+      text: `<strong>.dll files</strong> account for significant scan time (<strong>${dur.toLocaleString()} ms</strong>). ` +
+            `This is expected for applications like ${appName} that load many dynamic libraries at startup and during operation. ` +
+            `MDE checks every DLL load against its threat signatures in real time.`
+    });
+  }
+
+  if (exeExt) {
+    const dur = parseDur(exeExt);
+    insights.push({
+      color: 'amber',
+      text: `<strong>.exe files</strong> are also being scanned heavily (<strong>${dur.toLocaleString()} ms</strong>). ` +
+            `This typically happens when the application spawns child processes or updates components during use.`
+    });
+  }
+
+  // File volume
+  if (files.length > 0) {
+    const topFile = getVal(files[0], ['FileName','FilePath','Path','File']) || '';
+    const shortFile = topFile.split('\\').pop() || topFile;
+    const topFileDur = parseDur(files[0]);
+    if (shortFile && topFileDur > 0) {
+      insights.push({
+        color: 'cyan',
+        text: `The most-scanned file is <strong>${shortFile}</strong> (${topFileDur.toLocaleString()} ms). ` +
+              `Frequently-accessed files generate repeated scan events, especially temp files and application cache.`
+      });
+    }
+  }
+
+  // Scan count
+  if (scans.length > 0) {
+    const totalDur = scans.reduce((acc, s) => acc + parseDur(s), 0);
+    insights.push({
+      color: 'green',
+      text: `Total of <strong>${scans.length}</strong> scan events recorded. ` +
+            `Cumulative scan time: <strong>${totalDur.toLocaleString()} ms</strong> (~${(totalDur/1000).toFixed(1)}s). ` +
+            `On a constrained VM (e.g. 4 vCPU), this overhead directly competes with ${appName}'s own CPU usage.`
+    });
+  }
+
+  // Render
+  const body = document.getElementById('insightBody');
+  body.innerHTML = insights.map(ins => `
+    <div class="insight-item">
+      <div class="insight-dot ${ins.color}"></div>
+      <div>${ins.text}</div>
+    </div>
+  `).join('');
+}
+
+// CHARTS
+function renderCharts(d) {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  const chartDefaults = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#4A6070', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(0,200,255,0.04)' } },
+      y: { ticks: { color: '#4A6070', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(0,200,255,0.04)' } }
+    }
+  };
+
+  // Processes
+  const procs = (d.topProcesses || []).slice(0, 10);
+  if (procs.length) {
+    const labels = procs.map(p => getProcName(p) || 'Unknown');
+    const values = procs.map(p => parseDur(p));
+    const maxV = Math.max(...values);
+    charts.proc = new Chart(document.getElementById('chartProcesses'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: values.map(v => {
+            const r = v / maxV;
+            if (r > 0.5) return 'rgba(255,64,96,0.75)';
+            if (r > 0.2) return 'rgba(255,176,32,0.75)';
+            return 'rgba(0,200,255,0.5)';
+          }),
+          borderColor: 'transparent',
+          borderRadius: 2,
+        }]
+      },
+      options: { ...chartDefaults, indexAxis: 'y' }
+    });
+  }
+
+  // Extensions
+  const exts = (d.topExtensions || []).slice(0, 10);
+  if (exts.length) {
+    const labels = exts.map(p => getVal(p, ['Extension','Ext','Name']) || '(none)');
+    const values = exts.map(p => parseDur(p));
+    charts.ext = new Chart(document.getElementById('chartExtensions'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: 'rgba(0,200,255,0.5)',
+          borderColor: 'rgba(0,200,255,0.8)',
+          borderWidth: 1,
+          borderRadius: 2,
+        }]
+      },
+      options: { ...chartDefaults }
+    });
+  }
+}
+
+// TABLES
+function renderTable(tableId, badgeId, rows, type) {
+  document.getElementById(badgeId).textContent = rows.length + ' entries';
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  tbody.innerHTML = '';
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:24px">No data in this session</td></tr>';
+    return;
+  }
+
+  const durs = rows.map(r => parseDur(r));
+  const maxDur = Math.max(...durs);
+
+  rows.forEach((row, i) => {
+    const dur = parseDur(row);
+    const cnt = getCount(row);
+    const avg = (cnt !== '—' && Number(cnt) > 0) ? Math.round(dur / Number(cnt)) : '—';
+    const [sev, cls] = severity(dur, maxDur);
+    const pct   = maxDur > 0 ? (dur / maxDur * 100).toFixed(1) : 0;
+    const color = cls === 'sev-high' ? 'var(--red)' : cls === 'sev-med' ? 'var(--amber)' : 'var(--cyan)';
+
+    let nameCell = '';
+    if (type === 'process') {
+      const name = getProcName(row) || '<span style="color:var(--muted);font-style:italic">kernel/system</span>';
+      nameCell = `<td class="mono">${name}</td>`;
+    } else if (type === 'file') {
+      const path = getVal(row, ['FileName','FilePath','Path','File']) || '—';
+      nameCell = `<td class="path">${path}</td>`;
+    } else {
+      const ext = getVal(row, ['Extension','Ext','Name']) || '(none)';
+      nameCell = `<td class="mono">${ext}</td>`;
+    }
+
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="color:var(--muted);width:30px">' + (i+1) + '</td>' +
+      nameCell +
+      '<td><div class="dur-wrap">' +
+        '<div class="dur-bar-bg"><div class="dur-bar" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="dur-val" style="color:' + color + '">' + dur.toLocaleString() + ' ms</span>' +
+      '</div></td>' +
+      (type === 'process' ? '<td class="mono">' + (avg !== '—' ? avg.toLocaleString() + ' ms' : '—') + '</td>' : '') +
+      '<td class="mono">' + cnt + '</td>' +
+      '<td><span class="sev ' + cls + '">' + sev + '</span></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function renderScansTable(scans) {
+  document.getElementById('badgeScans').textContent = scans.length + ' events';
+  const tbody = document.querySelector('#tableScans tbody');
+  tbody.innerHTML = '';
+
+  if (!scans.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:24px">No raw scan data</td></tr>';
+    return;
+  }
+
+  const durs   = scans.map(r => parseDur(r));
+  const maxDur = Math.max(...durs);
+
+  scans.slice(0, 200).forEach((scan, i) => {
+    const path   = getVal(scan, ['Path','FileName','FilePath','File']) || '—';
+    const proc   = getProcName(scan) || '<span style="color:var(--muted);font-style:italic">kernel/system</span>';
+    const dur    = parseDur(scan);
+    const reason = getVal(scan, ['Reason','SkipReason','ScanReason']) || '—';
+    const [,cls] = severity(dur, maxDur);
+    const color  = cls === 'sev-high' ? 'var(--red)' : cls === 'sev-med' ? 'var(--amber)' : 'var(--cyan)';
+    const pct    = maxDur > 0 ? (dur / maxDur * 100).toFixed(1) : 0;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="color:var(--muted);width:30px">' + (i+1) + '</td>' +
+      '<td class="path">' + path + '</td>' +
+      '<td class="mono" style="white-space:nowrap">' + proc + '</td>' +
+      '<td><div class="dur-wrap">' +
+        '<div class="dur-bar-bg"><div class="dur-bar" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<span class="dur-val" style="color:' + color + '">' + dur.toLocaleString() + ' ms</span>' +
+      '</div></td>' +
+      '<td style="color:var(--muted);font-size:10px">' + reason + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+// FILTER
+function applyFilter() {
+  const q = document.getElementById('filterInput').value.toLowerCase().trim();
+  ['tableProcesses','tableFiles','tableExtensions','tableScans'].forEach(id => {
+    document.querySelectorAll('#' + id + ' tbody tr').forEach(tr => {
+      tr.style.display = (q === '' || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+    });
+  });
+}
+
+// RESET
+function resetDashboard() {
+  DATA = null;
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+  document.getElementById('filterInput').value = '';
+  document.getElementById('dashboard').style.display = 'none';
+  dropzone.style.display = 'block';
+  fileInput.value = '';
+}
+</script>
+</body>
+</html>
