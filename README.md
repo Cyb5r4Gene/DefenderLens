@@ -3,7 +3,7 @@
 > **Browser-based MDE performance dashboard for IT security teams**  
 > Identify which processes, files, and extensions are causing Microsoft Defender for Endpoint to spike CPU and RAM — no server, no installation, no data leaves your machine.
 
-![DefenderLens Dashboard](screenshot.png)
+![DefenderLens Dashboard](assets/screenshot.png)
 
 ---
 
